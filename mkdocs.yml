@@ -1,0 +1,34 @@
+site_name: GMP Hack Days
+pages:
+  - Home: index.md
+  - Self-deployed collection:
+    - Prometheus-operator scraping metrics to GMP: prometheus-operator-to-gmp.md
+  - Managed collection with GKE Standard:
+    - GMP scraping Custom App metrics: gmp-with-gkestandard-custom.md
+    - GMP scraping Fluent-bit metrics: gmp-with-gkestandard-flientbit.md
+    - GMP scraping Nginx-Ingress metrics: gmp-with-gkestandard-nginxingress.md
+    - GMP quering Google Cloud Metrics with PromQL and Grafana: gmp-for-gcp-cloud-resources.md
+    - Centralized Multi-tenant GMP setup with GKE Clusters in Different Projects: gmp-multi-tenant.md
+  - Managed collection with GKE Autopilot:
+    - GMP setup with single GKE Autopilot: gmp-with-gkeautopilot.md
+  - Managed Prometheus AlertManager:
+    - GMP Managed Prometheus AlertManager: gmp-alertmanager.md
+theme:
+  name: material
+  logo: 'images/prometheus.png'
+extra_css:
+    - css/extra.css
+extra:
+  social:
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/googlecloud
+  palette:
+    primary: 'light blue'
+    accent: 'light blue'
+markdown_extensions:
+  - admonition
+  - codehilite:
+      guess_lang: false
+  - toc:
+      permalink: true
+  - footnotes
