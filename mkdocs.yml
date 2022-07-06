@@ -11,6 +11,8 @@ pages:
     - Centralized Multi-tenant GMP setup with GKE Clusters in Different Projects: gmp-multi-tenant.md
   - Managed collection with GKE Autopilot:
     - GMP setup with single GKE Autopilot: gmp-with-gkeautopilot.md
+  - Setting up GMP with Terraform:
+    - Automate GMP deployument with Terraform: gmp-with-terraform.md
   - Managed Prometheus AlertManager:
     - GMP Managed Prometheus AlertManager: gmp-alertmanager.md
 theme:

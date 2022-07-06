@@ -19,6 +19,9 @@ To learn more about Google Cloud Managed Service for Prometheus checkout the [GM
   - [GMP setup with single GKE Cluster to scrape Nginx-Ingress metrics](./docs/gmp-with-gkestandard-nginxingress.md) - Deploy GMP to scrape metrics from Nginx-Ingress Controller and observe dashboards in Grafana.
   - [Setup GMP and query Google Cloud Metrics with PromQL and Grafana](./docs/gmp-for-gcp-cloud-resources.md) - Monitor GCP Cloud Resources with GMP and Grafana.
   - [Centralized Multi-tenant GMP setup with GKE Clusters in Different Projects](./docs/gmp-multi-tenant.md) - WIP
+  
+- Setting up GMP with Terraform
+  - [GMP setup with Terraform](./docs/gmp-with-terraform.md) - WIP
 
 - Managed collection with GKE Autopilot
   - [GMP setup with single GKE Autopilot](./docs/gmp-with-gkeautopilot.md)- WIP
