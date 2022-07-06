@@ -13,6 +13,8 @@ pages:
     - GMP setup with single GKE Autopilot: gmp-with-gkeautopilot.md
   - Setting up GMP with Terraform:
     - Automate GMP deployument with Terraform: gmp-with-terraform.md
+  - Setting up GMP with KCC:
+    - Automate GMP deployument with KCC: gmp-with-terraform.md
   - Managed Prometheus AlertManager:
     - GMP Managed Prometheus AlertManager: gmp-alertmanager.md
 theme:

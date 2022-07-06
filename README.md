@@ -23,6 +23,9 @@ To learn more about Google Cloud Managed Service for Prometheus checkout the [GM
 - Setting up GMP with Terraform
   - [GMP setup with Terraform](./docs/gmp-with-terraform.md) - WIP
 
+- Setting up GMP with KCC
+  - [GMP setup with KCC](./docs/gmp-with-kcc.md) - WIP
+
 - Managed collection with GKE Autopilot
   - [GMP setup with single GKE Autopilot](./docs/gmp-with-gkeautopilot.md)- WIP
 
