@@ -33,8 +33,8 @@ gcloud container clusters create k8s-prometheus-labs \
 --enable-ip-alias \
 --enable-network-policy \
 --num-nodes 1 \
---machine-type "t2d-standard-8" \
---release-channel regular
+--machine-type "e2-standard-4" \
+--release-channel rapid
 ```
 
 ```
@@ -83,7 +83,7 @@ helm repo update
 ```
 cd ~/$MY_REPO/notepad-infrastructure/helm
 helm pull prometheus-community/kube-prometheus-stack
-tar -xvzf kube-prometheus-stack-18.0.5.tgz
+tar -xvzf kube-prometheus-stack-36.6.1.tgz
 cd kube-prometheus-stack
 tree -L 2
 ```
@@ -147,7 +147,7 @@ grafana:
   ingress:
     enabled: true
     path: /*
-    pathType: Prefix
+    pathType: ImplementationSpecific
   service:
     type: NodePort
 EOF
@@ -181,8 +181,7 @@ kubens monitoring
 
 ```
 kubectl get svc prometheus-stack-grafana
-
-kubectl port-forward svc/prometheus-stack-grafana 3001:3000
+kubectl get ing
 ```
 
 **Step 2:** Launch the Grafana Dashboard and see Predefined Dashboards:
@@ -437,9 +436,12 @@ rules:
 EOF
 ```
 
+
+```
 kubectl apply -f prometheus-service-account.yaml
 kubectl apply -f prometheus-cluster-role.yaml
 kubectl apply -f prometheus-cluster-role-binding.yaml
+```
 
 
 ```
