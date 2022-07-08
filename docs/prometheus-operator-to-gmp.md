@@ -359,6 +359,8 @@ Create a file pod-monitor.yaml with the following content to add a `PodMonitor` 
 
 Define a PodMonitor in a manifest file `podmonitor.yaml` to select only this deployment pod 
 
+
+
 ```
 cat << EOF>> podmonitor.yaml
 apiVersion: monitoring.coreos.com/v1
@@ -370,7 +372,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: example-app
+      app: prom-example
   podMetricsEndpoints:
   - port: metrics
 EOF
@@ -467,18 +469,7 @@ kubectl apply -f prom_resource.yaml
 ```
 
 
-```
-kind: PodMonitoring
-metadata:
-  name: prom-example
-spec:
-  selector:
-    matchLabels:
-      app: prom-example
-  endpoints:
-  - port: metrics
-    interval: 30s
-```
+
 
 
 ## 7 Cleanup 
