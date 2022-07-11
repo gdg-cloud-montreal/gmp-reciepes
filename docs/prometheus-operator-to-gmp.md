@@ -34,7 +34,7 @@ gcloud container clusters create k8s-prometheus-labs \
 --enable-network-policy \
 --num-nodes 1 \
 --machine-type "e2-standard-4" \
---release-channel rapid
+--release-channel regular
 ```
 
 ```
@@ -82,8 +82,8 @@ helm repo update
 
 ```
 cd ~/$MY_REPO/notepad-infrastructure/helm
-helm pull prometheus-community/kube-prometheus-stack
-tar -xvzf kube-prometheus-stack-36.6.1.tgz
+helm pull prometheus-community/kube-prometheus-stack/35.6.0
+tar -xvzf kube-prometheus-stack-35.6.0.tgz
 cd kube-prometheus-stack
 tree -L 2
 ```
@@ -169,8 +169,8 @@ EOF
 
 ```
 kubectl create ns monitoring
-helm install prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring --values grafana_values.yaml
 kubens monitoring
+helm install prometheus-stack prometheus-community/kube-prometheus-stack --version 35.6.0 --values grafana_values.yaml
 ```
 
 
@@ -291,7 +291,7 @@ Choose:
     Observe CPU and Memory per Pods
 
 
-## 4 Deploy application and scrape custom metrics
+## 4 Deploy application and scrape custom metrics with `PodMonitor`
 
 Deploy application `prom-example`:
 
@@ -304,7 +304,7 @@ kubens prom-test
 
 **Step 2** Create deployment `prom-example`
 ```
-cat << EOF>> example-app.yaml
+cat << EOF>> prom-example.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -337,7 +337,7 @@ EOF
 **Step 4** Deploy `prom-example` application
 
 ```
-kubectl apply -f example-app.yaml
+kubectl apply -f prom-example.yaml
 ```
 
 ```
@@ -354,21 +354,45 @@ kubectl get crd | grep monitoring
 
 The operator uses `ServiceMonitors` or `PodMonitor` to define a set of targets to be monitored by Prometheus. It uses label selectors to define which `Services` or `Pod` to monitor, the namespaces to look for, and the port on which the metrics are exposed.
 
+
+First let's find out how `kind: Prometheus` will select `PodMonitor` using `serviceMonitorSelector` ?
+
+```
+kubens monitoring
+kubectl get prometheuses.monitoring.coreos.com prometheus-stack-kube-prom-prometheus -o yaml | grep -C5 podMonitorSelector
+```
+
+
+**Output:** 
+
+```
+  podMonitorSelector:
+    matchLabels:
+      release: prometheus-stack
+```
+
+!!! result
+    Prometheus Operator will select all `podMonitor` that match match label: `release: prometheus-stack`
+
+
+
 Create a file pod-monitor.yaml with the following content to add a `PodMonitor` so that the Prometheus server scrapes only its own metrics endpoints:
 
-Define a PodMonitor in a manifest file `podmonitor.yaml` to select only this deployment pod 
 
-
+Define a PodMonitor in a manifest file `podmonitor.yaml` by selecting `app: prom-example` labels in namespace `prom-test` and scrape metrics from `port: metrics`. Define `PodMonitor` labels as `release: prometheus-stack`, so that Prometheus operator can select them. 
 
 ```
 cat << EOF>> podmonitor.yaml
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
-  name: example-app
+  name: prom-example
   labels:
-    team: frontend
+    release: prometheus-stack
 spec:
+  namespaceSelector:
+    matchNames:
+      - prom-test
   selector:
     matchLabels:
       app: prom-example
@@ -381,96 +405,182 @@ EOF
 kubectl apply -f podmonitor.yaml
 ```
 
+
+**Step 3** Observe that `PodMonitor` been picked up by Prometheus Operator
+
+
+kubectl -n monitoring get secret prometheus-prometheus-stack-kube-prom-prometheus -ojson | jq -r '.data["prometheus.yaml.gz"]' | base64 -d | gunzip | grep "prom-example"
+
+
+## 5 Deploy application and scrape custom metrics with `ServiceMonitor`
+
+**Step 1** Deploy application `example-app` in `default` namespace:
+
+
 ```
-cat << EOF>> prometheus-service-account.yaml
-apiVersion: v1
-kind: ServiceAccount
+cat << EOF>> example-app.yaml
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: prometheus
-EOF
-```
-
-```
-cat << EOF>> prometheus-cluster-role-binding.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: prometheus
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: prometheus
-subjects:
-- kind: ServiceAccount
-  name: prometheus
-  namespace: default
-EOF
-```
-
-```
-cat << EOF>> prometheus-cluster-role.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: prometheus
-rules:
-- apiGroups: [""]
-  resources:
-  - nodes
-  - nodes/metrics
-  - services
-  - endpoints
-  - pods
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources:
-  - configmaps
-  verbs: ["get"]
-- apiGroups:
-  - networking.k8s.io
-  resources:
-  - ingresses
-  verbs: ["get", "list", "watch"]
-- nonResourceURLs: ["/metrics"]
-  verbs: ["get"]
-EOF
-```
-
-
-```
-kubectl apply -f prometheus-service-account.yaml
-kubectl apply -f prometheus-cluster-role.yaml
-kubectl apply -f prometheus-cluster-role-binding.yaml
-```
-
-
-```
-cat << EOF>> prom_resource.yaml
-apiVersion: monitoring.coreos.com/v1
-kind: Prometheus
-metadata:
-  name: prometheus
+  name: example-app
 spec:
-  serviceAccountName: prometheus
-  serviceMonitorSelector:
+  replicas: 3
+  selector:
     matchLabels:
-      team: frontend
+      app: example-app
+  template:
+    metadata:
+      labels:
+        app: example-app
+    spec:
+      containers:
+      - name: example-app
+        image: fabxc/instrumented_app
+        ports:
+        - name: web
+          containerPort: 8080
+EOF
+```
+
+```
+cat << EOF>> example-svc.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: example-app
+  labels:
+    app: example-app
+spec:
+  selector:
+    app: example-app
+  ports:
+  - name: web
+    port: 8080
+EOF
+```
+
+
+```
+kubens default
+kubectl apply -f example-app.yaml
+kubectl apply -f example-svc.yaml
+```
+
+
+**Step 2** Deploy `ServiceMonitor` in `monitoring` namespace
+
+
+First let's find out how `kind: Prometheus` will select `PodMonitor` using `serviceMonitorSelector` ?
+
+```
+kubens monitoring
+kubectl get prometheuses.monitoring.coreos.com prometheus-stack-kube-prom-prometheus -o yaml | grep -C5 serviceMonitorSelector
+```
+
+
+**Output:** 
+
+```
   podMonitorSelector:
     matchLabels:
-      team: frontend
-  resources:
-    requests:
-      memory: 400Mi
-  enableAdminAPI: false
+      release: prometheus-stack
+```
+
+!!! result
+    Prometheus Operator will select all `podMonitor` that match match label: `release: prometheus-stack`
+
+```
+cat << EOF>> example-svc-mon.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-app
+  labels:
+    release: prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: example-app
+  endpoints:
+  - port: web
 EOF
 ```
 
+```
+kubens monitoring
+kubectl apply -f example-svc-mon.yaml
+```
+
+
+Verify `servicemonitor` has been created in `monitoring` namespace
 
 ```
-kubectl apply -f prom_resource.yaml
+kubectl get -A servicemonitor.monitoring.coreos.com
+```
+
+!!! note
+    Creation of `servicemonitor` can be done in application namespace as well
+
+
+**Step 3** Observe that ServiceMonitor been picked up by Prometheus Operator
+
+
+kubectl -n monitoring get secret prometheus-prometheus-stack-kube-prom-prometheus -ojson | jq -r '.data["prometheus.yaml.gz"]' | base64 -d | gunzip | grep "example-app"
+
+
+
+**Step 4** Observe Prometheus UI and check that `servicemonitor` has been discovered under `Targets` and `ServiceDiscovery`:
+
+```
+kubectl port-forward svc/prometheus-stack-kube-prom-prometheus  8080:9090
 ```
 
 
+**Step 5** **Step 4** Observe Grafana UI and try to build a dashboards using on the exposed Prometheus metrics emitted by `example-app` app:
+
+The following metrics are exposed:
+
+- `version` - of type _gauge_ - containing the app version - as a constant metric value `1` and label `version`, representing this app version
+- `http_requests_total` - of type _counter_ - representing the total numbere of incoming HTTP requests
+- `http_request_duration_seconds` - of type _histogram_, representing duration of all HTTP requests
+- `http_request_duration_seconds_count`- total count of all incoming HTTP requeests
+- `http_request_duration_seconds_sum` - total duration in seconds of all incoming HTTP requests
+- `http_request_duration_seconds_bucket` - a histogram representation of the duration of the incoming HTTP requests
+
+The sample output of the `/metric` endpoint after 5 incoming HTTP requests shown below.
+
+Note: with no initial incoming request, only `version` metric is reported.
+
+```
+# HELP http_request_duration_seconds Duration of all HTTP requests
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.005"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.01"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.025"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.05"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.1"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.25"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="0.5"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="1"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="2.5"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="5"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="10"} 5
+http_request_duration_seconds_bucket{code="200",handler="found",method="get",le="+Inf"} 5
+http_request_duration_seconds_sum{code="200",handler="found",method="get"} 0.00047495999999999997
+http_request_duration_seconds_count{code="200",handler="found",method="get"} 5
+# HELP http_requests_total Count of all HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{code="200",method="get"} 5
+# HELP version Version information about this binary
+# TYPE version gauge
+version{version="v0.3.0"} 1
+```
+
+
+## 6 Migrate to Google Managed Prometheus
 
 
 
