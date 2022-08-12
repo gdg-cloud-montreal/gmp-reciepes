@@ -95,7 +95,7 @@ In this example I will be using the Manual installation type so we can use the l
         masterAuthorizedNetworksConfig:
             cidrBlocks:
             - displayName: Trusted external network
-                cidrBlock: 10.2.0.0/16
+              cidrBlock: 10.2.0.0/16
         addonsConfig:
             gcePersistentDiskCsiDriverConfig:
                 enabled: true
