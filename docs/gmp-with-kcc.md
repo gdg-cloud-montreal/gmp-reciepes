@@ -3,9 +3,11 @@
 
 To start we will need to create a cluster with the Config Connector Resources install, this can be GKE or a compliant K8s distributions (ie kind), see [here](https://cloud.google.com/config-connector/docs/concepts/installation-types) for installation types. 
 
-In this example I will be using the Manual installation type so we can use the latest version of Config Connector (1.91 at the time of this writing) and a GKE cluster so we can use Workload Identity.
+In this example I will highlight the two ways to install Config Connector. The first will be the manual mode which can be used on both GKE clusters as well as other CNCF conformant clusters.
 
-#  Deploy GKE Cluster with GMP enabled via Config Connector
+The second option will be using Config Controller which is a pre-configured managed cluster that comes pre-loaded with Config Connector as well as Config Sync and Policy Controller.
+
+## Manual Install
 
 1. Create a Kubernetes Cluster
 
@@ -67,14 +69,45 @@ In this example I will be using the Manual installation type so we can use the l
         ```
     - Config Namespace for the resources and annotate it.
         ```
-        kubectl create namespace gmp-cluster
+        kubectl create namespace config-control
         ```
 
         ```
         kubectl annotate namespace \
-        gmp-cluster cnrm.cloud.google.com/project-id=${PROJECT_ID}
+        config-control cnrm.cloud.google.com/project-id=${PROJECT_ID}
         ```
-3. Create the Container Cluster manifest.
+## Config Controller
+1. Create a [Config Controller](https://cloud.google.com/anthos-config-management/docs/concepts/config-controller-overview) instance. For this I will assume you have a `default` network  setup but you can use a network of your choosing using the `--network=you-network --subnet=subnet`.
+
+```
+gcloud services enable krmapihosting.googleapis.com \
+    container.googleapis.com \
+    cloudresourcemanager.googleapis.com
+gcloud anthos config controller create gmp-recipes --location northamerica-northeast1
+```
+
+2. Authenticate with the Instance
+
+```
+gcloud anthos config controller get-credentials gmp-recipes \
+    --location northamerica-northeast1
+```
+
+3. Assign permissions to the Config Connector SA
+```
+export SA_EMAIL="$(kubectl get ConfigConnectorContext -n config-control \
+    -o jsonpath='{.items[0].spec.googleServiceAccount}' 2> /dev/null)"
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member "serviceAccount:${SA_EMAIL}" \
+    --role "roles/owner" \
+    --project "${PROJECT_ID}"
+```
+
+The install will take about 15 minutes as the cluster gets provisioned and the resources are installed.
+
+## Deploy the GMP Enabled Cluster
+
+1. Create the Container Cluster manifest.
 
     ```
     cat >gmp-cluster.yaml <<EOL
@@ -83,9 +116,9 @@ In this example I will be using the Manual installation type so we can use the l
     metadata:
         labels:
             availability: dev
-            target-audience: development
+            target-audience: gdg-cloud-montreal
         name: gmp-enabled-cluster
-        namespace: gmp-cluster
+        namespace: config-control
     spec:
         description: A GMP enabled cluster
         location: northamerica-northeast1-a
@@ -129,7 +162,7 @@ In this example I will be using the Manual installation type so we can use the l
 To verify the cluster is up and running we can run the following command or go to the gke console.
 
 ```
-kubectl get containerclusters -n gmp-cluster
+kubectl get containerclusters -n config-control 
 ```
 Output:
 ```
