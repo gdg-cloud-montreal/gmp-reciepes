@@ -86,67 +86,7 @@ EOF
         kubectl annotate namespace \
         config-control cnrm.cloud.google.com/project-id=${PROJECT_ID}
         ```
-3. Create the Container Cluster manifest.
 
-```
-cat << EOF>> configconnector.yaml
-apiVersion: core.cnrm.cloud.google.com/v1beta1
-kind: ConfigConnector
-metadata:
-    # the name is restricted to ensure that there is only one
-    # ConfigConnector resource installed in your cluster
-    name: configconnector.core.cnrm.cloud.google.com
-spec:
-    mode: cluster
-    googleServiceAccount: "gmp-demo@${PROJECT_ID}.iam.gserviceaccount.com"
-EOF
-
-
-
-cat >gmp-cluster.yaml <<EOL
-apiVersion: container.cnrm.cloud.google.com/v1beta1
-kind: ContainerCluster
-metadata:
-    labels:
-        availability: dev
-        target-audience: development
-    name: gmp-enabled-cluster
-    namespace: gmp-cluster
-spec:
-    description: A GMP enabled cluster
-    location: northamerica-northeast1-a
-    initialNodeCount: 1
-    networkingMode: ROUTES
-    clusterIpv4Cidr: 10.96.0.0/14
-    masterAuthorizedNetworksConfig:
-        cidrBlocks:
-        - displayName: Trusted external network
-            cidrBlock: 10.2.0.0/16
-    addonsConfig:
-        gcePersistentDiskCsiDriverConfig:
-            enabled: true
-        horizontalPodAutoscaling:
-            disabled: true
-        httpLoadBalancing:
-            disabled: false
-    loggingConfig:
-        enableComponents:
-        - "SYSTEM_COMPONENTS"
-        - "WORKLOADS"
-    monitoringConfig:
-        enableComponents:
-        - "SYSTEM_COMPONENTS"
-        managedPrometheus:
-            enabled: true
-    workloadIdentityConfig:
-        # Replace ${PROJECT_ID?} with your project ID.
-        workloadPool: "${PROJECT_ID}.svc.id.goog"
-EOL
-```
-
-=======
-        config-control cnrm.cloud.google.com/project-id=${PROJECT_ID}
-        ```
 ## Config Controller
 1. Create a [Config Controller](https://cloud.google.com/anthos-config-management/docs/concepts/config-controller-overview) instance. For this I will assume you have a `default` network  setup but you can use a network of your choosing using the `--network=you-network --subnet=subnet`.
 
@@ -222,7 +162,6 @@ The install will take about 15 minutes as the cluster gets provisioned and the r
     EOL
     ```
 
->>>>>>> 124c4629e3a48381b84cf9407ff56bdeb9a68457
 4. Deploy the Manifest.
 
     ```
@@ -234,11 +173,7 @@ The install will take about 15 minutes as the cluster gets provisioned and the r
 To verify the cluster is up and running we can run the following command or go to the gke console.
 
 ```
-<<<<<<< HEAD
-kubectl get containerclusters -n gmp-cluster
-=======
 kubectl get containerclusters -n config-control 
->>>>>>> 124c4629e3a48381b84cf9407ff56bdeb9a68457
 ```
 Output:
 ```
