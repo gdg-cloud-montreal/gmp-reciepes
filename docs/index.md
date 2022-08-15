@@ -1,1 +1,1 @@
-# Welcome to GMP Hack Day
+# Welcome to GMP Hack Days

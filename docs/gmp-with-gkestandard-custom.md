@@ -1,24 +1,8 @@
-# Lab 6 Monitoring with Prometheus Operator
+# Scraping Metrics App metrics with GMP and Managed Collections
 
+## 1 Configure GMP and Managed Collections
 
-The `Prometheus` Operator is a tool developed and opnesourced by CoreOS that aims to automate manual operations of Prometheus and Alertmanager on Kubernetes using Kubernetes Custom Resource Definitions (CRDs).
-
-The `Prometheus` Operator provides easy monitoring definitions for Kubernetes services and deployment and management of Prometheus instances.
-
-Once installed, the Prometheus Operator provides the following features:
-
-  * **Kubernetes Custom Resources:** Use `Kubernetes` custom resources to deploy and manage `Prometheus`, `Alertmanager`, and related components.
-  * **Simplified Deployment Configuration:** Configure the fundamentals of Prometheus like versions, persistence, retention policies, and replicas from a native Kubernetes resource.
-  * **Target Services via Labels:** Automatically generate monitoring target configurations based on familiar Kubernetes label queries; no need to learn a Prometheus specific configuration language.
-
-**Objective:**
-
-  * Explore the operators' deployment setup
-  * Configure `ServiceMonitor`, which declaratively specifies how groups of Kubernetes services should be monitored. The Operator automatically generates Prometheus scrape configuration based on the current state of the objects in the API server.
-  * Configure `PrometheusRule` and `AlertmanagerConfig` to be able to send Slack alerts
-
-
-## 0 Create Regional GKE Cluster on GCP
+### 1.1 Create Regional GKE Cluster on GCP with GMP
 
 **Step 1** Enable the Google Kubernetes Engine API.
 ```
@@ -28,273 +12,76 @@ gcloud services enable container.googleapis.com
 **Step 2** From the cloud shell, run the following command to create a cluster with 1 node:
 
 ```
-gcloud container clusters create k8s-prometheus-labs \
+gcloud beta container clusters create k8s-gmp-labs \
 --region us-central1 \
 --enable-ip-alias \
 --enable-network-policy \
 --num-nodes 1 \
---machine-type "t2d-standard-8" \
---release-channel regular
+--machine-type "e2-standard-4" \
+--release-channel regular \
+--enable-managed-prometheus
 ```
 
 ```
-gcloud container clusters get-credentials k8s-prometheus-labs --region us-central1
+gcloud container clusters get-credentials k8s-gmp-labs --region us-central1
 ```
 
-
-**Step 3: (Optional)** Setup kubectx
-
-```
-sudo apt install kubectx
-```
-
-!!! note
-    we've installed `kubectx` + `kubens`: Power tools for `kubectl`:
-    - `kubectx` helps you switch between clusters back and forth
-    - `kubens` helps you switch between Kubernetes namespaces smoothly
-
-## 1 Install Prometheus Operator and Grafana Helm Charts
-
-### 1.1 Install `kube-prometheus-stack` helm chart
-
-**kube-prometheus**
-[kube-prometheus](https://github.com/prometheus-operator/kube-prometheus) provides example configurations for a complete cluster monitoring
-stack based on Prometheus and the Prometheus Operator.  This includes deployment of multiple Prometheus and Alertmanager instances,
-metrics exporters such as the node_exporter for gathering node metrics, scrape target configuration linking Prometheus to various
-metrics endpoints, and example alerting rules for notification of potential issues in the cluster.
-
-**helm chart**
-The [prometheus-community/kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
-helm chart provides a similar feature set to kube-prometheus. For more information, please see the [chart's readme](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack#kube-prometheus-stack)
-
-
-
-**Step 1** Configure `Helm` repository
-
+**Step 3** List the Google Managed Prometheus (GMPs) Custom Resources Definitions (CRD's)
 
 ```
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-```
-
-
-**Step 2** Fetch  `Helm` repository to local filesystem
-
-```
-cd ~/$MY_REPO/notepad-infrastructure/helm
-helm pull prometheus-community/kube-prometheus-stack
-tar -xvzf kube-prometheus-stack-18.0.5.tgz
-cd kube-prometheus-stack
-tree -L 2
-```
-
-**Output:**
-
-```
-── charts
-│   ├── grafana
-│   ├── kube-state-metrics
-│   └── prometheus-node-exporter
-├── crds
-│   ├── crd-alertmanagerconfigs.yaml
-│   ├── crd-alertmanagers.yaml
-│   ├── crd-podmonitors.yaml
-│   ├── crd-probes.yaml
-│   ├── crd-prometheuses.yaml
-│   ├── crd-prometheusrules.yaml
-│   ├── crd-servicemonitors.yaml
-│   └── crd-thanosrulers.yaml
-├── templates
-│   ├── NOTES.txt
-│   ├── _helpers.tpl
-│   ├── alertmanager
-│   ├── exporters
-│   │   ├── core-dns
-│   │   ├── kube-api-server
-│   │   ├── kube-controller-manager
-│   │   ├── kube-dns
-│   │   ├── kube-etcd
-│   │   ├── kube-proxy
-│   │   ├── kube-scheduler
-│   │   ├── kube-state-metrics
-│   │   ├── kubelet
-│   │   └── node-exporter
-│   ├── grafana
-│   ├── prometheus
-│   └── prometheus-operator
-└── values.yaml
-```
-
-!!! summary 
-    This chart is maintained by the Prometheus community and contains everything you need to get started including:
-
-    * `prometheus operator`
-    * `alertmanager`
-    * `grafana` with predefined dashboards
-    * `prometheus-node-exporter` - Prometheus exporter for hardware and OS metrics exposed by *NIX kernels, written in Go with pluggable metric collectors
-    *  Kubernetes Control and Data plane  `exporters` such as `kube-api-server`, `core-dns`, `kube-controller-manager`, `kube-etcd`, `kube-scheduler`, `kubelet`
-    * `kube-state-metrics` - is a simple service that listens to the Kubernetes API server and generates metrics about the state of the objects
-
-
-
-**Step 3** Create custom Grafana configuration, that will allow to expose Grafana Dashboard:
-
-Option 1 Ingress
-```
-cat << EOF>> grafana_values.yaml
-grafana:
-  adminPassword: admin
-  ingress:
-    enabled: true
-    path: /*
-    pathType: Prefix
-  service:
-    type: NodePort
-EOF
-```
-
-Option 1 LoadBalancer
-
-```
-cat << EOF>> grafana_values.yaml
-grafana:
-  adminPassword: admin
-  service:
-    type: LoadBalancer
-EOF
-```
-
-**Step 4** Install Helm Chart to `monitoring` namespace
-
-
-```
-kubectl create ns monitoring
-helm install prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring --values grafana_values.yaml
-kubens monitoring
-```
-
-
-## 4 Observe Grafana Dashboards
-
-
-**Step 1:** Locate Grafana Dashboard URL:
-
-```
-kubectl get svc prometheus-stack-grafana
-
-kubectl port-forward svc/prometheus-stack-grafana 3001:3000
-```
-
-**Step 2:** Launch the Grafana Dashboard and see Predefined Dashboards:
-
-```
-loadbalancer_ip
-```
-
-
-We've setup `admin` user password as: `admin`. So we will use this values to login to Grafana dashboard:
-
-```
-admin/admin
-```
-
-!!! result
-    You should see your Grafana interface
-
-
-**Step 2** Access Grafana Dashboard and see Predefined Dashboards:
-
-![alt text](images/grafana_dashboard.png)
-
-**Step 3** Observe following Dashboards:
-
-
-```
-General /Kubernetes / Compute Resources / Cluster
-```
-
-!!! summary
-    Observe Usage, Totals, Quotas, Requests for Memory and CPU per namespace
-    This values could be good input for Pods `requests` and `limits` measurements
-
-
-```
-General /Kubernetes / Compute Resources / Nodes (Pods)
-```
-
-!!! summary
-    Observe CPU and Memory per Node
-
-```
-General /Kubernetes / Compute Resources / Namespace (Pods)
-```
-
-!!! summary
-    Observe CPU and Memory per Pods
-
-
-Observe Dashboards for Control Plane monitoring:
-
-```
-General / Kubernetes / API server
-General / Kubernetes / Kubelet
-General / Kubernetes / Scheduler
-General / Kubernetes / Controller Manager
-General / etcd
-```
-
-!!! note
-    some of the Dashboards (etcd, Scheduler, Controller Manager) are empty, this is because GKE is Managed Kubernetes so some metrics are not available for scraping.
-
-
-
-## 3 Deploy onlineboutique application and observe app compute resources
-
-Deploy microservices application `onlineboutique`:
-
-**Step 1** Create Namespace `onlineboutique`
-
-```
-kubectl create ns onlineboutique
-```
-
-**Step 2** Deploy Microservice application
-```
-git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
-cd microservices-demo
+kubectl get crd | grep monitoring
 ```
 
 ```
-kubens onlineboutique
-kubectl apply -f ./release/kubernetes-manifests.yaml
+clusterpodmonitorings.monitoring.googleapis.com       2022-07-12T20:26:52Z
+clusterrules.monitoring.googleapis.com                2022-07-12T20:26:52Z
+globalrules.monitoring.googleapis.com                 2022-07-12T20:26:53Z
+operatorconfigs.monitoring.googleapis.com             2022-07-12T20:26:53Z
+podmonitorings.monitoring.googleapis.com              2022-07-12T20:26:53Z
+rules.monitoring.googleapis.com                       2022-07-12T20:26:54Z
 ```
 
-**Step 3** Verify Deployment:
+
+
+### 1.2 Verify SA account has correct permissions. 
+
+
+**Option 1:** Using GKE with `default` Compute Service Account, should have all required permissions as it is using Editor role (roles/editor) on the project. (without WI enabled)
+
+**Option 2:** Using GKE with custom Service Account for Nodes (without WI enabled)
+
+Make sure default compute `SA` has `monitoring.metricWriter` and `monitoring.viewer` roles:
 
 ```
-kubectl get pods
+gcloud projects get-iam-policy $PROJECT_ID
 ```
 
-**Step 4** Observe following Dashboards:
+If you have `Editor` role or `roles/monitoring.metricWriter` and `role: roles/monitoring.viewer` skip the step.
+Otherwise add following roles tp SA.
 
 
 ```
-General /Kubernetes / Compute Resources / Namespace (Pods)
-General /Kubernetes / Compute Resources / Namespace (Workloads)
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+ --member='serviceAccount:$PROJECT_NUMBER-compute@developer.gserviceaccount.com' \
+ --role=roles/monitoring.metricWriter
 
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+ --member='serviceAccount:$PROJECT_NUMBER-compute@developer.gserviceaccount.com' \
+ --role=roles/monitoring.viewer
 ```
 
-Choose:
-  * Relative time ranges: `Last 15 minutes`
-  * Namespace: `onlineboutique`
+**Option 3:** If using GKE with WI, follow the [Configure a service account for Workload Identity](https://cloud.google.com/stackdriver/docs/managed-prometheus/setup-unmanaged#gmp-wli-svcacct) instructions
 
-!!! summary
-    Observe CPU and Memory per Pods
+**Option 4:** If using Non-GKE Kubernetes clusters, follow the [Provide credentials explicitly](https://cloud.google.com/stackdriver/docs/managed-prometheus/setup-unmanaged#explicit-credentials) instructions
 
 
-## 4 Deploy application and scrape custom metrics
 
-Deploy application `prom-example`:
+### 1.3 Deploy `prom-example` application and scrape custom metrics with `PodMonitoring`
+
+GMP out of the box doesn't scrape any metrics. In order to see any scraped Metrics in Prometheus UI or Grafana, 
+we need to have deployed application and configure it as target for scraping using `PodMonitoring` CR.
+
+We going to start by deploying application `prom-example` in `prom-test` namespace and adding it as scraping target:
 
 **Step 1** Create Namespace `prom-test`
 
@@ -303,9 +90,10 @@ kubectl create ns prom-test
 kubens prom-test
 ```
 
-**Step 2** Create deployment `prom-example`
+**Step 2** Create deployment for application `prom-example` 
+
 ```
-cat << EOF>> example-app.yaml
+cat << EOF>> prom-example.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -335,139 +123,28 @@ spec:
 EOF
 ```
 
-**Step 4** Deploy `prom-example` application
+**Step 3** Deploy `prom-example` application
 
 ```
-kubectl apply -f example-app.yaml
+kubectl apply -f prom-example.yaml
 ```
 
 ```
 kubectl get pods
 ```
 
-**Step 5** List the Prometheus Operator Custom Resources Definitions (CRD's)
+**Step 4** Scrape Pod Metrics using `PodMonitoring` Custom Resource (CR)
 
-```
-kubectl get crd | grep monitoring
-```
-
-**Step 6** Scrape Pod Metrics using `PodMonitor` crd
-
-The operator uses `ServiceMonitors` or `PodMonitor` to define a set of targets to be monitored by Prometheus. It uses label selectors to define which `Services` or `Pod` to monitor, the namespaces to look for, and the port on which the metrics are exposed.
-
-Create a file pod-monitor.yaml with the following content to add a `PodMonitor` so that the Prometheus server scrapes only its own metrics endpoints:
-
-Define a PodMonitor in a manifest file `podmonitor.yaml` to select only this deployment pod 
-
-```
-cat << EOF>> podmonitor.yaml
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
-metadata:
-  name: example-app
-  labels:
-    team: frontend
-spec:
-  selector:
-    matchLabels:
-      app: example-app
-  podMetricsEndpoints:
-  - port: metrics
-EOF
-```
-
-```
-kubectl apply -f podmonitor.yaml
-```
-
-```
-cat << EOF>> prometheus-service-account.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: prometheus
-EOF
-```
-
-```
-cat << EOF>> prometheus-cluster-role-binding.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: prometheus
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: prometheus
-subjects:
-- kind: ServiceAccount
-  name: prometheus
-  namespace: default
-EOF
-```
-
-```
-cat << EOF>> prometheus-cluster-role.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: prometheus
-rules:
-- apiGroups: [""]
-  resources:
-  - nodes
-  - nodes/metrics
-  - services
-  - endpoints
-  - pods
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources:
-  - configmaps
-  verbs: ["get"]
-- apiGroups:
-  - networking.k8s.io
-  resources:
-  - ingresses
-  verbs: ["get", "list", "watch"]
-- nonResourceURLs: ["/metrics"]
-  verbs: ["get"]
-EOF
-```
-
-kubectl apply -f prometheus-service-account.yaml
-kubectl apply -f prometheus-cluster-role.yaml
-kubectl apply -f prometheus-cluster-role-binding.yaml
+To ingest the metric data emitted by the application, it is require to use target scraping. Target scraping and metrics ingestion are configured using Kubernetes CRs. The GMP uses `PodMonitoring` CR to define a set of targets to be monitored by Prometheus. It uses label selectors to define which  `Pods` to monitor, the namespaces to look for, and the port on which the metrics are exposed.
 
 
-```
-cat << EOF>> prom_resource.yaml
-apiVersion: monitoring.coreos.com/v1
-kind: Prometheus
-metadata:
-  name: prometheus
-spec:
-  serviceAccountName: prometheus
-  serviceMonitorSelector:
-    matchLabels:
-      team: frontend
-  podMonitorSelector:
-    matchLabels:
-      team: frontend
-  resources:
-    requests:
-      memory: 400Mi
-  enableAdminAPI: false
-EOF
-```
+Create a file `pod-prom-monitoring.yaml` with the following content to add a `PodMonitoring` so that the Prometheus server scrapes only its own metrics endpoints:
 
+Define a `PodMonitoring` in a manifest file `pod-prom-monitoring.yaml` by selecting `app: prom-example` labels and scrape metrics from `port: metrics` with Interval 60 seconds. Define `PodMonitoring` labels as `release: prometheus-stack`, so that Prometheus operator can select them. 
 
 ```
-kubectl apply -f prom_resource.yaml
-```
-
-
-```
+cat << EOF>> pod-prom-monitoring.yaml
+apiVersion: monitoring.googleapis.com/v1
 kind: PodMonitoring
 metadata:
   name: prom-example
@@ -477,85 +154,271 @@ spec:
       app: prom-example
   endpoints:
   - port: metrics
+    interval: 60s
+EOF
+```
+
+```
+kubectl apply -f pod-prom-monitoring.yaml
+```
+
+!!! info
+    To configure horizontal collection that applies to a range of pods across all namespaces, use the `ClusterPodMonitoring` resource. The `ClusterPodMonitoring` resource provides the same interface as the `PodMonitoring` resource but does not limit discovered pods to a given namespace.
+
+
+**Step 3** Observe `PodMonitoring` 
+
+```
+kubectl get -A podmonitorings.monitoring.googleapis.com
+```
+
+### 1.4 Deploy `example-app` application and scrape custom metrics
+
+**Step 1** Deploy application `example-app` in `default` namespace:
+
+```
+cat << EOF>> example-app.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: example-app
+  template:
+    metadata:
+      labels:
+        app: example-app
+    spec:
+      containers:
+      - name: example-app
+        image: fabxc/instrumented_app
+        ports:
+        - name: web
+          containerPort: 8080
+EOF
+```
+
+```
+cat << EOF>> example-svc.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name: example-app
+  labels:
+    app: example-app
+spec:
+  selector:
+    app: example-app
+  ports:
+  - name: web
+    port: 8080
+EOF
+```
+
+
+```
+kubens default
+kubectl apply -f example-app.yaml
+kubectl apply -f example-svc.yaml
+```
+
+
+**Step 2** Deploy `PodMonitoring` in `default` namespace
+
+
+```
+cat << EOF>> example-pod-mon.yaml
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: example-app
+spec:
+  selector:
+    matchLabels:
+      app: example-app
+  endpoints:
+  - port: web
     interval: 30s
+EOF
 ```
 
 
-## 5 Import dashboard
-
-**Step 1** Search Kubernetes related Dashboards:
-
 ```
-https://grafana.com/grafana/dashboards
-```
-
-Filter by:  `Name / Description` - 
-
-```
-Kubernetes Deployment Statefulset Daemonset metrics
-```
-
-This will give you several outputs, we will use following Dashboards:
-
-```
-https://grafana.com/grafana/dashboards/8588
-```
-
-```
-Get this dashboard:
-8588
-Copy ID to Clipboard
+kubectl apply -f example-pod-mon.yaml
 ```
 
 
-
-**Step 2** To import a dashboard we will start by creating a new `Folder`, click the + icon in the side menu, and then click Folder
-
-Name folder:
+Verify `monitoring` has been created in `default` namespace
 
 ```
-Custom
-```
-**Step 3** To import a dashboard click the + icon in the side menu, and then click Import.
-
-In Import via grafana.com prompt Paste Grafana URL
-
-```
-8588
+kubectl get -A podmonitorings.monitoring.googleapis.com
 ```
 
-Choose:
-
-  * Folder: `Custom`
-  * Select Prometheus data source: `Prometheus (default)` 
+!!! note
+    Creation of `monitoring` can be done in application namespace as well
 
 
 
-!!! Extra
-    Experiments with different dashboards, e.g. ElasticSearch, Nginx, Cert-Manager, Istio
+### 1.5 Setup Prometheus UI for GMP
 
-## 7 Cleanup 
+In order to see if GMP is working and scraping metric, GCP provides Prometheus UI `frontend` image.
 
-Uninstall Helm Charts:
+To deploy the Prometheus UI for Managed Service for Prometheus, run the following commands.
+
+**Step 1**  Deploy the `Prometheus UI` frontend service inside of namespace where Grafana going to be installed (or already installed))
 
 
 ```
-helm uninstall prometheus-stack -n monitoring
+export GRAFANA_NAMESPACE=grafana
 ```
 
 ```
-kubectl delete crd alertmanagerconfigs.monitoring.coreos.com
-kubectl delete crd alertmanagers.monitoring.coreos.com
-kubectl delete crd podmonitors.monitoring.coreos.com
-kubectl delete crd probes.monitoring.coreos.com
-kubectl delete crd prometheuses.monitoring.coreos.com
-kubectl delete crd prometheusrules.monitoring.coreos.com
-kubectl delete crd servicemonitors.monitoring.coreos.com
-kubectl delete crd thanosrulers.monitoring.coreos.com
+curl https://raw.githubusercontent.com/GoogleCloudPlatform/prometheus-engine/v0.4.1/examples/frontend.yaml |
+sed 's/\$PROJECT_ID/gcp-demos-331123/' |
+kubectl apply -n $GRAFANA_NAMESPACE -f -
 ```
+
+**Step 2**  Port-forward the `frontend` service to your local machine. The following example forwards the service to port 9090:
+
+```
+kubectl -n $GRAFANA_NAMESPACE port-forward svc/frontend 8080:9090
+```
+
+You can access the Prometheus UI in your by using the Web Preview button.
+
+The following screenshot shows a table in the Prometheus UI that displays the `up{cluster="k8s-gmp-labs"}` metric:
+
+
+![alt text](images/gmp_ui.png)
+
+!!! result
+    We can see that all pods from `example-app` and `prom-example` are being scraped.
+
+
+**Step 3** Observe  and try to build a dashboards using on the exposed Prometheus metrics emitted by `example-app` app:
+
+The following metrics are exposed:
+
+- `version` - of type _gauge_ - containing the app version - as a constant metric value `1` and label `version`, representing this app version
+- `http_requests_total` - of type _counter_ - representing the total numbere of incoming HTTP requests
+
+The sample output of the `/metric` endpoint after 5 incoming HTTP requests shown below.
+
+Note: with no initial incoming request, only `version` metric is reported.
+
+```
+# HELP http_requests_total Count of all HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{code="200",method="get"}
+# HELP version Version information about this binary
+# TYPE version gauge
+version{version="v0.3.0"} 1
+```
+
+
+### 1.6 Use Grafana with GMP
+
+#### 1.6.1 Install Grafana
+
+Google Cloud APIs all require authentication using OAuth2; however, Grafana doesn't support OAuth2 authentication for Prometheus data sources. To use Grafana with Managed Service for Prometheus, we've deployed Prometheus UI as an authentication proxy in a previous step.
+
+**Option 1:** Configure existing Grafana Dashboard to use GMP
+
+If you would like to take advantage of you existing Dashboards and already deployed Grafana,
+the only steps needed is to create a `Data Source` for Google Managed Prometheus described in this [reference](https://cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-grafana)
+
+
+Once configured you can redirect existing dashboards to the new `Data Source`, or create the new once.
+
+
+**Option 2:** Configure Grafana Dashboard that comes with GMP 
+
+ Configure Grafana Dashboard that comes with GMP, following this [steps](https://cloud.google.com/stackdriver/docs/managed-prometheus/query#grafana-deploy)
+
+
+If you don't have a running Grafana deployment in your cluster, then you can create an ephemeral test deployment to experiment with.
+
+To create an ephemeral Grafana deployment, apply the Managed Service for Prometheus grafana.yaml manifest to your cluster, and port-forward the grafana service to your local machine. The following example forwards the service to port 3000.
+
+
+```
+kubectl -n gmp-test apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/prometheus-engine/v0.4.1/examples/grafana.yaml
+```
+
+```
+kubectl -n $GRAFANA_NAMESPACE port-forward svc/grafana 8080:3000
+```
+
+**Option 3:** Use Grafana Helm Charts or Grafana Operator
+
+For production deployment it is preferred to use  [Grafana Helm Chart](https://artifacthub.io/packages/helm/grafana/grafana) or [Grafana Operator](https://artifacthub.io/packages/olm/community-operators/grafana-operator) as you can define and recreate you dashboards via json or CRDs in consistent manner.
+
+
+
+
+#### 1.6.2 Configure Grafana to work with GMP
+
+To query Managed Service for Prometheus in Grafana by using the Prometheus UI as the authentication proxy, you must add new data source to Grafana. 
+
+
+To add a data source for the managed service use following [reference documenation](https://cloud.google.com/stackdriver/docs/managed-prometheus/query#grafana-deploy)
+
+
+### 2.5 Verify GMP Cost
+
+**Option 1** Estimate Cost based on ingested metrics.
+
+*Step 1* Create a new Grafana Dashboard:
+
+```
+Data Source: Managed Service for Prometheus
+
+Metric Browser: `rate(gcm_export_samples_exported_total{job=~".+",instance=~".+"}[5m])`
+
+Step: 10
+```
+
+![alt text](images/gmp_cost_calculation.png)
+
+
+Example calculation:
+
+N1. 770 Samples per second based on Dashboard value
+
+N2. 770 samples per second * 2628000 seconds/mo = 2023 B samples/mo
+
+N3. Since $0.15/million samples: first 0-50 billion samples#  [Reference N1](https://cloud.google.com/stackdriver/pricing#monitoring-costs)  
+
+N4. We can calculate final cost: 2023 B samples/mo * 0.15 = ~303$ per month 
+
+
+
+
+**Option 2** View your Google Cloud bill
+
+1. In the Google Cloud console, go to the Billing page.
+
+2. If you have more than one billing account, select Go to linked billing account to view the current project's billing account. To locate a different billing account, select Manage billing accounts and choose the account for which you'd like to get usage reports.
+
+3. Select Reports.
+
+4. From the Services menu, select the Stackdriver Monitoring option.
+
+5. From the SKUs menu, select the following options:
+
+  * Prometheus Samples Ingested
+  * Monitoring API Requests
+
+
+## 7 Cleanup
+
+Delete Kubernetes cluster as it will enquire cost both for GKE and GMP.
 
 Delete GKE cluster:
 
 ```
-gcloud container clusters delete k8s-prometheus-labs --region us-central1
+gcloud container clusters delete k8s-gmp-labs --region us-central1
 ```

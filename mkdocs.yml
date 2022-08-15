@@ -5,18 +5,18 @@ pages:
     - Prometheus-operator scraping metrics to GMP: prometheus-operator-to-gmp.md
   - Managed collection with GKE Standard:
     - GMP scraping Custom App metrics: gmp-with-gkestandard-custom.md
-    - GMP scraping Fluent-bit metrics: gmp-with-gkestandard-flientbit.md
-    - GMP scraping Nginx-Ingress metrics: gmp-with-gkestandard-nginxingress.md
-    - GMP quering Google Cloud Metrics with PromQL and Grafana: gmp-for-gcp-cloud-resources.md
-    - Centralized Multi-tenant GMP setup with GKE Clusters in Different Projects: gmp-multi-tenant.md
-  - Managed collection with GKE Autopilot:
-    - GMP setup with single GKE Autopilot: gmp-with-gkeautopilot.md
-  - Setting up GMP with Terraform:
-    - Automate GMP deployument with Terraform: gmp-with-terraform.md
+    - GMP scraping Fluent-bit metrics (WIP): gmp-with-gkestandard-flientbit.md
+    - GMP scraping Nginx-Ingress metrics (WIP): gmp-with-gkestandard-nginxingress.md
+    - GMP quering Google Cloud Metrics with PromQL and Grafana (WIP): gmp-for-gcp-cloud-resources.md
+    - Centralized Multi-tenant GMP setup with GKE Clusters in Different Projects (WIP): gmp-multi-tenant.md
+  # - Managed collection with GKE Autopilot:
+  #   - GMP setup with single GKE Autopilot: gmp-with-gkeautopilot.md
+  # - Setting up GMP with Terraform:
+  #   - Automate GMP deployument with Terraform: gmp-with-terraform.md
   - Setting up GMP with KCC:
     - Automate GMP deployument with KCC: gmp-with-kcc.md
-  - Managed Prometheus AlertManager:
-    - GMP Managed Prometheus AlertManager: gmp-alertmanager.md
+  # - Managed Prometheus AlertManager:
+  #   - GMP Managed Prometheus AlertManager: gmp-alertmanager.md
 theme:
   name: material
   logo: 'images/prometheus.png'
