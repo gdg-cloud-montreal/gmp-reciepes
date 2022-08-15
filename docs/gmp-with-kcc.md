@@ -12,7 +12,7 @@ In this example I will highlight the two ways to install Config Connector.
 
 **Option 1:** Manual mode which can be used on both GKE clusters as well as other CNCF conformant clusters.
 
-**Option 2:** Using `Config Controller` which is a pre-configured managed cluster that comes pre-loaded with Config Connector as well as Config Sync and Policy Controller.
+**Option 2:** Using `Config Controller` which is a pre-configured managed cluster that comes pre-loaded with Config Connector as well as Config Sync and Policy Controller. 
 
 ## Option 1: Manual Install
 
@@ -112,7 +112,9 @@ config-control cnrm.cloud.google.com/project-id=${PROJECT_ID}
 gcloud services enable krmapihosting.googleapis.com \
 container.googleapis.com \
 cloudresourcemanager.googleapis.com
+```
 
+```
 gcloud anthos config controller create gmp-recipes --location northamerica-northeast1
 ```
 
@@ -203,7 +205,7 @@ gmp-enabled-cluster   22m   True    UpToDate   3m3s
 Congrats, you've just deployed a GMP enabled cluster via Config Connector!
 
 
-## Cleanup
+## Cleanup for Option #1
 
 Delete Kubernetes clusters as it will enquire cost both for GKE and GMP.
 
@@ -211,3 +213,5 @@ Delete Kubernetes clusters as it will enquire cost both for GKE and GMP.
 gcloud container clusters delete kcc-configs --region northamerica-northeast1-a
 gcloud container clusters delete gmp-enabled-cluster --region northamerica-northeast1-a
 ```
+
+## Cleanup for Option #2
