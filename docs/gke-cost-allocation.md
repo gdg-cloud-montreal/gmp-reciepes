@@ -66,3 +66,10 @@ kubectl get pods
 
 **Step 5** Observe Detailed Billing Information for Pods:
 
+## Cleanup
+
+Delete Kubernetes clusters as it will enquire cost:
+
+```
+gcloud container clusters delete k8s-cost-allocation-labs --region us-central1
+```
